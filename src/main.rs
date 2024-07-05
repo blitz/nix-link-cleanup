@@ -68,6 +68,9 @@ fn find_problematic_links(
                 link_target.starts_with(nix_store_path)
                     && (link_target
                         .strip_prefix(nix_store_path)
+                        // This unwrap is safe, because we already
+                        // checked whether the link starts with the
+                        // right prefix.
                         .unwrap()
                         .components()
                         .count()
