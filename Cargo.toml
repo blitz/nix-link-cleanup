@@ -1,0 +1,10 @@
+[package]
+name = "nix-link-cleanup"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+
+[dependencies]
+clap = { version = "4.5.8", default-features = false, features = ["std", "derive", "help"] }
+regex = "1.10.5"
+walkdir = "2.5.0"
