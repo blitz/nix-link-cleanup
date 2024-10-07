@@ -24,21 +24,18 @@ struct Args {
     verbosity: u8,
 }
 
-fn find_problematic_links(
+/// Return an iterator of all symlinks that point into the Nix store.
+fn find_nix_store_links(
     root_directory: &Path,
     cross_filesystems: bool,
     verbose: bool,
-) -> Vec<PathBuf> {
-    let link_name_re =
-        Regex::new(r"^(result|result-.+)$").expect("Failed to create regular expression");
-    let nix_store_path = Path::new("/nix/store");
-
+) -> impl Iterator<Item = PathBuf> {
     WalkDir::new(root_directory)
         .follow_links(false)
         .same_file_system(!cross_filesystems)
         .into_iter()
         // Ignore errors and keep going.
-        .filter_map(|maybe_entry| {
+        .filter_map(move |maybe_entry| {
             maybe_entry
                 .map_err(|err| {
                     if verbose {
@@ -49,8 +46,11 @@ fn find_problematic_links(
         })
         .filter(|e| e.path_is_symlink())
         // The symlink must look like a typical result link.
-        .filter(|e| {
+        .filter(move |e| {
             if let Some(file_name_str) = e.file_name().to_str() {
+                let link_name_re = Regex::new(r"^(result|result-.+)$")
+                    .expect("Failed to create regular expression");
+
                 link_name_re.is_match(file_name_str)
             } else {
                 if verbose {
@@ -63,8 +63,10 @@ fn find_problematic_links(
             }
         })
         // It must point to the Nix store.
-        .filter(|e| {
+        .filter(move |e| {
             if let Ok(link_target) = fs::read_link(e.path()) {
+                let nix_store_path = Path::new("/nix/store");
+
                 link_target.starts_with(nix_store_path)
                     && (link_target
                         .strip_prefix(nix_store_path)
@@ -87,13 +89,12 @@ fn find_problematic_links(
         })
         // We only want to remember the path.
         .map(|e| e.path().to_path_buf())
-        .collect::<Vec<_>>()
 }
 
 fn main() {
     let args = Args::parse();
 
-    for p in find_problematic_links(&args.directory, args.cross_filesystems, args.verbosity != 0) {
+    for p in find_nix_store_links(&args.directory, args.cross_filesystems, args.verbosity != 0) {
         println!("{}", p.display());
 
         if args.delete {
