@@ -1,5 +1,4 @@
 use clap::{ArgAction, Parser};
-use regex::Regex;
 use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
@@ -48,10 +47,7 @@ fn find_nix_store_links(
         // The symlink must look like a typical result link.
         .filter(move |e| {
             if let Some(file_name_str) = e.file_name().to_str() {
-                let link_name_re = Regex::new(r"^(result|result-.+)$")
-                    .expect("Failed to create regular expression");
-
-                link_name_re.is_match(file_name_str)
+                file_name_str == "result" || file_name_str.starts_with("result-")
             } else {
                 if verbose {
                     eprintln!(

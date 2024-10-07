@@ -6,5 +6,10 @@ license = "GPL-3.0-or-later"
 
 [dependencies]
 clap = { version = "4.5.8", default-features = false, features = ["std", "derive", "help"] }
-regex = "1.10.5"
 walkdir = "2.5.0"
+
+# Give everyone some disk space back.
+[profile.release]
+lto = true
+opt-level = "s"
+panic = "abort"
