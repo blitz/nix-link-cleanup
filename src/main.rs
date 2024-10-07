@@ -62,21 +62,14 @@ fn find_nix_store_links(
                 false
             }
         })
-        // It must point to the Nix store.
+        // It must point to a top-level directory in the Nix store.
         .filter(move |e| {
             if let Ok(link_target) = fs::read_link(e.path()) {
-                let nix_store_path = Path::new("/nix/store");
-
-                link_target.starts_with(nix_store_path)
-                    && (link_target
-                        .strip_prefix(nix_store_path)
-                        // This unwrap is safe, because we already
-                        // checked whether the link starts with the
-                        // right prefix.
-                        .unwrap()
-                        .components()
-                        .count()
-                        == 1)
+                link_target
+                    .strip_prefix("/nix/store")
+                    // This make sure we only match top-level directories.
+                    .map(|suffix| suffix.components().count() == 1)
+                    .unwrap_or(false)
             } else {
                 if verbose {
                     eprintln!(
