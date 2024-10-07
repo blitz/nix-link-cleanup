@@ -43,7 +43,6 @@ fn find_problematic_links(
                     if verbose {
                         eprintln!("Failed to walk: {err}");
                     }
-                    ()
                 })
                 .ok()
         })
