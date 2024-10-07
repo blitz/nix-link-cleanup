@@ -37,6 +37,7 @@ fn find_problematic_links(
         .follow_links(false)
         .same_file_system(!cross_filesystems)
         .into_iter()
+        // Ignore errors and keep going.
         .filter_map(|maybe_entry| {
             maybe_entry
                 .map_err(|err| {
@@ -47,7 +48,7 @@ fn find_problematic_links(
                 .ok()
         })
         .filter(|e| e.path_is_symlink())
-        // The symlink looks like a typical result link?
+        // The symlink must look like a typical result link.
         .filter(|e| {
             if let Some(file_name_str) = e.file_name().to_str() {
                 link_name_re.is_match(file_name_str)
@@ -61,7 +62,7 @@ fn find_problematic_links(
                 false
             }
         })
-        // It points to the Nix store?
+        // It must point to the Nix store.
         .filter(|e| {
             if let Ok(link_target) = fs::read_link(e.path()) {
                 link_target.starts_with(nix_store_path)
