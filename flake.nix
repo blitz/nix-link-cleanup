@@ -14,7 +14,7 @@
   };
 
   outputs = inputs@{ flake-parts, ... }:
-    flake-parts.lib.mkFlake { inherit inputs; } {
+    flake-parts.lib.mkFlake { inherit inputs; } ({ withSystem, ... }: {
 
       imports = [
         inputs.git-hooks-nix.flakeModule
@@ -22,7 +22,12 @@
 
       systems = import inputs.systems;
 
-      flake = { };
+      flake.nixosModules.default = { pkgs, lib, ... }: {
+        imports = [ ./module.nix ];
+        programs.nix-link-cleanup.package = lib.mkDefault (withSystem pkgs.stdenv.hostPlatform.system ({ config, ... }:
+          config.packages.default
+        ));
+      };
 
       perSystem = { config, system, pkgs, lib, ... }:
         let
@@ -89,5 +94,5 @@
             ];
           };
         };
-    };
+    });
 }
