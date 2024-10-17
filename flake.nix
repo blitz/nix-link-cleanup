@@ -7,75 +7,87 @@
 
     systems.url = "github:nix-systems/default-linux";
 
-    flake-utils.url = "github:numtide/flake-utils";
-    flake-utils.inputs.systems.follows = "systems";
+    flake-parts.url = "github:hercules-ci/flake-parts";
 
-    pre-commit-hooks.url = "github:cachix/git-hooks.nix";
-    pre-commit-hooks.inputs.nixpkgs.follows = "nixpkgs";
+    git-hooks-nix.url = "github:cachix/git-hooks.nix";
+    git-hooks-nix.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = { self, nixpkgs, crane, flake-utils, pre-commit-hooks, ... }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let
-        pkgs = nixpkgs.legacyPackages.${system};
+  outputs = inputs@{ flake-parts, ... }:
+    flake-parts.lib.mkFlake { inherit inputs; } {
 
-        craneLib = crane.mkLib pkgs;
+      imports = [
+        inputs.git-hooks-nix.flakeModule
+      ];
 
-        # Common arguments can be set here to avoid repeating them later
-        # Note: changes here will rebuild all dependency crates
-        commonArgs = {
-          src = craneLib.cleanCargoSource ./.;
-          strictDeps = true;
-        };
+      systems = import inputs.systems;
 
-        # Build *just* the cargo dependencies, so we can reuse
-        # all of that work (e.g. via cachix) when running in CI
-        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+      flake = { };
 
-        nix-link-cleanup = craneLib.buildPackage (commonArgs // {
-          inherit cargoArtifacts;
-        });
-      in
-      {
-        checks = {
-          inherit nix-link-cleanup;
+      perSystem = { config, system, pkgs, lib, ... }:
+        let
+          craneLib = inputs.crane.mkLib pkgs;
 
-          # Run clippy (and deny all warnings) on the crate source,
-          # again, reusing the dependency artifacts from above.
-          #
-          # Note that this is done as a separate derivation so that
-          # we can block the CI if there are issues here, but not
-          # prevent downstream consumers from building our crate by itself.
-          clippy = craneLib.cargoClippy (commonArgs // {
+          # Common arguments can be set here to avoid repeating them later
+          # Note: changes here will rebuild all dependency crates
+          commonArgs = {
+            src = craneLib.cleanCargoSource ./.;
+            strictDeps = true;
+          };
+
+          # Build *just* the cargo dependencies, so we can reuse
+          # all of that work (e.g. via cachix) when running in CI
+          cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+
+          nix-link-cleanup = craneLib.buildPackage (commonArgs // {
             inherit cargoArtifacts;
-            cargoClippyExtraArgs = "--all-targets -- --deny warnings";
           });
+        in
+        {
+          pre-commit = {
+            check.enable = true;
 
-          pre-commit-check = pre-commit-hooks.lib.${system}.run {
-            src = ./.;
-            hooks = {
-              nixpkgs-fmt.enable = true;
-              rustfmt.enable = true;
+            settings = {
+              src = ./.;
+              hooks = {
+                nixpkgs-fmt.enable = true;
+                rustfmt.enable = true;
+              };
             };
           };
+
+          checks = {
+            inherit nix-link-cleanup;
+
+            # Run clippy (and deny all warnings) on the crate source,
+            # again, reusing the dependency artifacts from above.
+            #
+            # Note that this is done as a separate derivation so that
+            # we can block the CI if there are issues here, but not
+            # prevent downstream consumers from building our crate by itself.
+            clippy = craneLib.cargoClippy (commonArgs // {
+              inherit cargoArtifacts;
+              cargoClippyExtraArgs = "--all-targets -- --deny warnings";
+            });
+          };
+
+          packages.default = nix-link-cleanup;
+
+          apps.default = {
+            type = "app";
+            program = lib.getExe nix-link-cleanup;
+          };
+
+          devShells.default = craneLib.devShell {
+            checks = config.checks;
+
+            shellHook = config.pre-commit.installationScript;
+
+            # Extra inputs can be added here; cargo and rustc are provided by default.
+            packages = [
+              # Nothing here yet.
+            ];
+          };
         };
-
-        packages.default = nix-link-cleanup;
-
-        apps.default = flake-utils.lib.mkApp {
-          drv = nix-link-cleanup;
-        };
-
-        devShells.default = craneLib.devShell {
-          checks = self.checks.${system};
-
-          # Configure commit hooks to maintain style.
-          inherit (self.checks.${system}.pre-commit-check) shellHook;
-
-          # Extra inputs can be added here; cargo and rustc are provided by default.
-          packages = [
-            # Nothing here yet.
-          ];
-        };
-      });
+    };
 }
